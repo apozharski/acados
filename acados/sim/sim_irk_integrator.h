@@ -80,7 +80,7 @@ typedef struct
 
 typedef struct
 {
-    struct blasfeo_dvec *rG;        // residuals of G (nx*ns)
+    struct blasfeo_dvec *rG;        // residuals of G ((nx+nz)*ns)
     struct blasfeo_dvec *K;         // internal K variables ((nx+nz)*ns)
     struct blasfeo_dvec *xt;        // temporary x
     struct blasfeo_dvec *xn;        // x at each integration step

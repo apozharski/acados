@@ -70,6 +70,7 @@ typedef enum
     GAUSS_LEGENDRE,
     GAUSS_RADAU_IIA,
     EXPLICIT_RUNGE_KUTTA,
+    ESDIRK,
 } sim_collocation_type;
 
 
@@ -92,7 +93,8 @@ void calculate_butcher_tableau(int ns, sim_collocation_type collocation_type, do
 //
 void get_explicit_butcher_tableau(int ns, double *A, double *b, double *c);
 
-
+// This returns actually the matrices D/B for the integral form
+void get_esdirk_butcher_tableau(int ns, double *A, double *b, double *c);
 
 #ifdef __cplusplus
 } /* extern "C" */

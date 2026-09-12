@@ -152,6 +152,8 @@ typedef struct
 
     double newton_tol; // optinally used in implicit integrators
 
+    bool integral_form;
+
     // workspace
     void *work;
 

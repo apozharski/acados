@@ -550,6 +550,9 @@ void calculate_butcher_tableau(int ns, sim_collocation_type collocation_type, do
         case EXPLICIT_RUNGE_KUTTA:
             get_explicit_butcher_tableau(ns, A_mat, b_vec, c_vec);
             break;
+	case ESDIRK:
+            get_esdirk_butcher_tableau(ns, A_mat, b_vec, c_vec);
+            break;
         default:
             printf("\nerror: calculate_butcher_tableau: unsupported collocation_type\n");
             exit(1);
@@ -637,6 +640,51 @@ void get_explicit_butcher_tableau(int ns, double *A, double *b, double *c)
             c[1] = 0.5;
             c[2] = 0.5;
             c[3] = 1.0;
+            break;
+        }
+        default:
+        {
+            printf("\n error: ERK: num_stages = %d not available. Only number of stages = {1,2,3,4} implemented!\n",ns);
+            exit(1);
+        }
+    }
+}
+
+void get_esdirk_butcher_tableau(int ns, double *A, double *b, double *c)
+{
+    switch (ns)
+    {
+        case 4:
+        {
+	    // Stiffly Accurate, L-Stable, ESDIRK method of order 3, stage order 2, with 4 stages.
+	    // https://ntrs.nasa.gov/api/citations/20010075154/downloads/20010075154.pdf
+            // A
+	    A[0 + ns * 0] = 0.0;
+	    A[0 + ns * 1] = 0.0;
+	    A[0 + ns * 2] = 0.0;
+	    A[0 + ns * 3] = 0.0;
+	    A[1 + ns * 0] = 0.435866521508459;
+	    A[1 + ns * 1] = 2.294280360279042;
+	    A[1 + ns * 2] = 0.0;
+	    A[1 + ns * 3] = 0.0;
+	    A[2 + ns * 0] = 0.2576482460664272;
+	    A[2 + ns * 1] = 0.49223577415536157;
+	    A[2 + ns * 2] = 2.294280360279042;
+	    A[2 + ns * 3] = 0.0;
+	    A[3 + ns * 0] = 0.18764102434672383;
+	    A[3 + ns * 1] = 2.0360121527379285;
+	    A[3 + ns * 2] = -5.115232383007837;
+	    A[3 + ns * 3] = 2.294280360279042;
+	    // b
+	    b[0] = 0.0;
+	    b[1] = 0.0;
+	    b[2] = 0.0;
+	    b[3] = 1.0;
+	    // c
+	    c[0] = 0.0;
+	    c[1] = 0.871733043016918;
+	    c[2] = 0.6;
+	    c[3] = 1.0;
             break;
         }
         default:
