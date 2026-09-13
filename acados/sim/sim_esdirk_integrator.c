@@ -663,7 +663,7 @@ acados_size_t sim_esdirk_workspace_calculate_size(void *config_, void *dims_, vo
     size += blasfeo_memsize_dmat(nxz, nu);      // df_du
     size += blasfeo_memsize_dmat(nxz, nz);      // df_dz
     
-    size += blasfeo_memsize_dmat(nxz, nz);      // df_dkz
+    size += blasfeo_memsize_dmat(nxz, nxz);      // df_dkz
 
     size += nxz * ns * sizeof(int); // ipiv
 
@@ -1179,20 +1179,20 @@ int sim_esdirk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_,
 
 		// TODO(@anton) is this copy necessary or can I replace the ode_res_out
 		// copy into the work matrix and do LU factorization
-		blasfeo_dgecp(nxz, nx, df_dxdot, 0, 0, df_dsz_ss_ii, 0, 0);
-		blasfeo_dgecp(nxz, nz, df_dz, 0, 0, df_dsz_ss_ii, 0, nx);
+		blasfeo_dgecp(nxz, nx, df_dxdot, 0, 0, df_dkz_ss_ii, 0, 0);
+		blasfeo_dgecp(nxz, nz, df_dz, 0, 0, df_dkz_ss_ii, 0, nx);
 		blasfeo_dgetrf_rp(nxz, nxz, df_dkz_ss_ii, 0, 0, df_dkz_ss_ii, 0, 0, ipiv_ss);
 
-		// permute
-		blasfeo_dvecpe(nxz, ipiv_ss, rf, 0);
-		// then backsolve storing the result in dkz
-		blasfeo_dtrsv_lnu(nxz, df_dkz_ss_ii, 0, 0, rf, 0, dkz, 0);
-		blasfeo_dtrsv_unn(nzx, df_dkz_ss_ii, 0, 0, dkz, 0, dkz, 0);
 	    }
 	    else
 	    {
 		// TODO(@anton) only recompute residual
 	    }
+	    // permute
+	    blasfeo_dvecpe(nxz, ipiv_ss, rf_ss_ii, 0);
+	    // then backsolve storing the result in dkz
+	    blasfeo_dtrsv_lnu(nxz, df_dkz_ss_ii, 0, 0, rf_ss_ii, 0, dkz, 0);
+	    blasfeo_dtrsv_unn(nzx, df_dkz_ss_ii, 0, 0, dkz, 0, dkz, 0);
 	    // handle the rest of the stages
 	    for (int ii = 1; ii < ns; ii++)
             {  // ii-th row of tableau
@@ -1226,12 +1226,19 @@ int sim_esdirk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_,
 			impl_ode_fun_jac_x_xdot_z_out_type, impl_ode_fun_jac_x_xdot_z_out);
 		    timing_ad += acados_toc(&timer_ad);
 
-		    // TODO(@anton) implement the 
+		    for (int jj = 0; jj < ii-1; jj++)
+		    {
+			 a = A_mat[ii + ns * jj] * step;
+			 // update the rf_ss_ii
+			 blasfeo_dgemv_n(nx+nz, nx, a, df_dx, 0, 0, rf+jj, 0, 1.0, rf_ss_ii, 0, rf_ss_ii, 0);
+		    }
 
+		    a = A_mat[ii + ns * ii] * step;
 		    // TODO(@anton) is this copy necessary or can I replace the ode_res_out
 		    // copy into the work matrix and do LU factorization
-		    blasfeo_dgecp(nxz, nx, df_dxdot, 0, 0, df_dsz_ss_ii, 0, 0);
-		    blasfeo_dgecp(nxz, nz, df_dz, 0, 0, df_dsz_ss_ii, 0, nx);
+		    blasfeo_dgecp(nxz, nx, df_dxdot, 0, 0, df_dkz_ss_ii, 0, 0);
+		    blasfeo_dgecp(nxz, nz, df_dz, 0, 0, df_dkz_ss_ii, 0, nx);
+		    blasfeo_dgead(nxz, nx, a, df_dx, 0, 0, df_dkz_ss_ii, 0, 0); // add the dx contribution
 		    blasfeo_dgetrf_rp(nxz, nxz, df_dkz_ss_ii, 0, 0, df_dkz_ss_ii, 0, 0, ipiv_ss_ii);
                 }
                 else // only eval function (without jacobian)
@@ -1243,10 +1250,10 @@ int sim_esdirk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_,
                     timing_ad += acados_toc(&timer_ad);
                 }
 		// permute
-		blasfeo_dvecpe(nxz, ipiv_ss_ii, rf, 0);
-		// then backsolve storing the result in rf
-		blasfeo_dtrsv_lnu(nxz, df_dkz_ss_ii, 0, 0, rf, 0, rf, 0);
-		blasfeo_dtrsv_unn(nzx, df_dkz_ss_ii, 0, 0, rf, 0, rf, 0);
+		blasfeo_dvecpe(nxz, ipiv_ss_ii, rf_ss_ii, 0);
+		// then backsolve storing the result in rf_ss_ii
+		blasfeo_dtrsv_lnu(nxz, df_dkz_ss_ii, 0, 0, rf_ss_ii, 0, rf_ss_ii, 0);
+		blasfeo_dtrsv_unn(nzx, df_dkz_ss_ii, 0, 0, rf_ss_ii, 0, rf_ss_ii, 0);
             }  // end ii
         } // end newton_iter
 
