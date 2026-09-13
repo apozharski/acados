@@ -644,9 +644,9 @@ acados_size_t sim_esdirk_workspace_calculate_size(void *config_, void *dims_, vo
     /* blasfeo structs */
     // TODO(@anton) implement also non-reuse mode
     size += ns * sizeof(struct blasfeo_dvec); // rf
-    size += ns * sizeof(struct blasfeo_dvec); // k
     size += ns * sizeof(struct blasfeo_dvec); // s
-    size += ns * sizeof(struct blasfeo_dvec); // z
+    size += ns * sizeof(struct blasfeo_dvec); // kz
+    size += ns * sizeof(struct blasfeo_dvec); // dkz
     size += sizeof(struct blasfeo_dvec); // xn
 
     // TODO(@anton) maybe I only actually need one?
@@ -654,9 +654,9 @@ acados_size_t sim_esdirk_workspace_calculate_size(void *config_, void *dims_, vo
 
     /* blasfeo mem */
     size += ns * blasfeo_memsize_dvec(nx+nz);	// rf
-    size += ns * blasfeo_memsize_dvec(nx);	// k
+    size += ns * blasfeo_memsize_dvec(nxz);	// xz
+    size += ns * blasfeo_memsize_dvec(nxz);	// dkz
     size += ns * blasfeo_memsize_dvec(nx);	// s
-    size += ns * blasfeo_memsize_dvec(nz);	// z
     size += blasfeo_memsize_dvec(nx);		// xn
 
     size += 2 * blasfeo_memsize_dmat(nxz, nx);  // df_dx, df_dxdot
@@ -713,9 +713,9 @@ static void *sim_esdirk_workspace_cast(void *config_, void *dims_, void *opts_, 
 
     for (int ii = 0; ii < ns; ii++) {
 	assign_and_advance_blasfeo_dvec_mem(nxz, &workspace->rf[ii], &c_ptr);
-	assign_and_advance_blasfeo_dvec_mem(nx, &workspace->k[ii], &c_ptr);
-	assign_and_advance_blasfeo_dvec_mem(nx, &workspace->s[ii], &c_ptr);
-	assign_and_advance_blasfeo_dvec_mem(nz, &workspace->z[ii], &c_ptr);
+	assign_and_advance_blasfeo_dvec_mem(nxz, &workspace->kz[ii], &c_ptr);
+	assign_and_advance_blasfeo_dvec_mem(nxz, &workspace->dKz[ii], &c_ptr);
+	assign_and_advance_blasfeo_dvec_mem(nx,  &workspace->s[ii], &c_ptr);
 	assign_and_advance_blasfeo_dmat_mem(nxz, nxz, &workspace->df_dkz[ii], &c_ptr);
     }
     assign_and_advance_blasfeo_dvec_mem(nx, &workspace->xn, &c_ptr);
@@ -1050,12 +1050,12 @@ int sim_esdirk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_,
     int *ipiv = workspace->ipiv;
 
     struct blasfeo_dvec *rf = workspace->rf;
-    struct blasfeo_dvec *x = workspace->x;
-    struct blasfeo_dvec *z = workspace->z;
-    struct blasfeo_dvec *k = workspace->k;
+    struct blasfeo_dvec *kz = workspace->kz;
+    struct blasfeo_dvec *dkz = workspace->dkz;
+    struct blasfeo_dvec *s = workspace->s;
     struct blasfeo_dvec *xn = workspace->xn;
     struct blasfeo_dvec *xt = workspace->xt;
-    struct blasfeo_dmat *df_dxz = workspace->df_dxz;
+    struct blasfeo_dmat *df_dkz = workspace->df_dkz;
 
     struct blasfeo_dmat df_dx  = workspace->df_dx;
     struct blasfeo_dmat df_dxdot  = workspace->df_dxdot;
@@ -1072,9 +1072,9 @@ int sim_esdirk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_,
         blasfeo_dgese(nx, np, 0.0, S_p, 0, 0);
     }
 
-    struct blasfeo_dvec_args impl_ode_x_in; impl_ode_x_in.x = xn; //set x to initial value
-    struct blasfeo_dvec_args impl_ode_xdot_in; impl_ode_xdot_in.x = k;
-    struct blasfeo_dvec_args impl_ode_z_in; impl_ode_z_in.x = z;
+    struct blasfeo_dvec_args impl_ode_x_in;
+    struct blasfeo_dvec_args impl_ode_xdot_in;
+    struct blasfeo_dvec_args impl_ode_z_in; impl_ode_z_in.xi = nx; // set offset in kz
     struct blasfeo_dvec_args impl_ode_res_out;
     // TODO(@anton): please let's move this into a function
     // SET FUNCTION IN- & OUTPUT TYPES
@@ -1160,8 +1160,8 @@ int sim_esdirk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_,
             }
 	    // set input vectors
 	    impl_ode_x_in.x = xn;
-	    impl_ode_xdot_in.x = k;
-	    impl_ode_z_in.x = z;
+	    impl_ode_xdot_in.x = kz;
+	    impl_ode_z_in.x = kz;
 	    // set the output vector
 	    impl_ode_res_out.x = rf_ss_ii;
 	    // build and factorize the matrices on the diagonal
@@ -1185,9 +1185,9 @@ int sim_esdirk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_,
 
 		// permute
 		blasfeo_dvecpe(nxz, ipiv_ss, rf, 0);
-		// then backsolve storing the result in rf
-		blasfeo_dtrsv_lnu(nxz, df_dkz_ss_ii, 0, 0, rf, 0, rf, 0);
-		blasfeo_dtrsv_unn(nzx, df_dkz_ss_ii, 0, 0, rf, 0, rf, 0);
+		// then backsolve storing the result in dkz
+		blasfeo_dtrsv_lnu(nxz, df_dkz_ss_ii, 0, 0, rf, 0, dkz, 0);
+		blasfeo_dtrsv_unn(nzx, df_dkz_ss_ii, 0, 0, dkz, 0, dkz, 0);
 	    }
 	    else
 	    {
@@ -1196,13 +1196,13 @@ int sim_esdirk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_,
 	    // handle the rest of the stages
 	    for (int ii = 1; ii < ns; ii++)
             {  // ii-th row of tableau
-		df_dkz_ss_ii = workspace->df_dkz + ii;
-		rf_ss_ii = workspace->rf + ii;
-		ipiv_ss_ii = workspace->ipiv + ii;
+		df_dkz_ss_ii = df_dkz+ii;
+		rf_ss_ii = rf+ii;
+		ipiv_ss_ii = ipiv+ii;
 		// set input vectors
 		impl_ode_x_in.x = s+ii;
-		impl_ode_xdot_in.x = k+ii;
-		impl_ode_z_in.x = z+ii;
+		impl_ode_xdot_in.x = kz+ii;
+		impl_ode_z_in.x = kz+ii;
 		// set the output vector
 		impl_ode_res_out.x = rf_ss_ii+ii;
 
@@ -1212,40 +1212,27 @@ int sim_esdirk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_,
 
                 for (int jj = 0; jj < ii; jj++)
                 {  // jj-th col of tableau
-                    // TODO(oj): precompute A_mat * step;
+                    // Compute the new state
                     a = A_mat[ii + ns * jj] * step;
                     // xt = xt + T_int * a[i,j]*K_j
                     blasfeo_daxpy(nx, a, k + jj, 0, s+ii, 0, s+ii, 0);
                 }
-                impl_ode_xdot_in.xi = ii * nx;  // use k_i of K = (k_1,..., k_{ns},z_1,..., z_{ns})
-                impl_ode_z_in.xi = ns * nx + ii * nz;
-		// use z_i of K = (k_1,..., k_{ns},z_1,..., z_{ns})
-                impl_ode_res_out.xi = ii * (nx + nz);  // store output in this position of rG
 
-                // compute the residual of implicit ode at time t_ii
-                if ((opts->jac_reuse && (ss == 0) && (iter == 0)) || (!opts->jac_reuse))
-                {   // evaluate the ode function & jacobian w.r.t. x, xdot;
-                    // &  compute jacobian dG_dK_ss;
-                    acados_tic(&timer_ad);
-                    model->impl_ode_fun_jac_x_xdot_z->evaluate(
-                        model->impl_ode_fun_jac_x_xdot_z, impl_ode_type_in, impl_ode_in,
-                        impl_ode_fun_jac_x_xdot_z_type_out, impl_ode_fun_jac_x_xdot_z_out);
-                    timing_ad += acados_toc(&timer_ad);
+		if ((opts->jac_reuse && (ss == 0) && (iter == 0)) || (!opts->jac_reuse))
+		{
+		    acados_tic(&timer_ad);
+		    model->impl_ode_fun_jac_x_xdot_z->evaluate(
+			model->impl_ode_fun_jac_x_xdot_z, impl_ode_in_type, impl_ode_in,
+			impl_ode_fun_jac_x_xdot_z_out_type, impl_ode_fun_jac_x_xdot_z_out);
+		    timing_ad += acados_toc(&timer_ad);
 
-                    // compute the blocks of dG_dK_ss
-                    for (int jj = 0; jj < ns; jj++)
-                    {  // compute the block (ii,jj)th block of dG_dK_ss
-                        a = A_mat[ii + ns * jj] * step;
-                        blasfeo_dgead(nx + nz, nx, a, df_dx, 0, 0,
-				      dG_dK_ss, ii * (nx + nz), jj * nx);
-                        if (jj == ii)
-                        {
-                            blasfeo_dgead(nx + nz, nx, 1, df_dxdot, 0, 0,
-                                          dG_dK_ss, ii * (nx + nz), jj * nx);
-                            blasfeo_dgead(nx + nz, nz, 1, df_dz,    0, 0,
-                                          dG_dK_ss, ii * (nx + nz), (nx * ns) + jj * nz);
-                        }
-                    }  // end jj
+		    // TODO(@anton) implement the 
+
+		    // TODO(@anton) is this copy necessary or can I replace the ode_res_out
+		    // copy into the work matrix and do LU factorization
+		    blasfeo_dgecp(nxz, nx, df_dxdot, 0, 0, df_dsz_ss_ii, 0, 0);
+		    blasfeo_dgecp(nxz, nz, df_dz, 0, 0, df_dsz_ss_ii, 0, nx);
+		    blasfeo_dgetrf_rp(nxz, nxz, df_dkz_ss_ii, 0, 0, df_dkz_ss_ii, 0, 0, ipiv_ss_ii);
                 }
                 else // only eval function (without jacobian)
                 {
@@ -1255,6 +1242,11 @@ int sim_esdirk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_,
                                                   impl_ode_fun_out);
                     timing_ad += acados_toc(&timer_ad);
                 }
+		// permute
+		blasfeo_dvecpe(nxz, ipiv_ss_ii, rf, 0);
+		// then backsolve storing the result in rf
+		blasfeo_dtrsv_lnu(nxz, df_dkz_ss_ii, 0, 0, rf, 0, rf, 0);
+		blasfeo_dtrsv_unn(nzx, df_dkz_ss_ii, 0, 0, rf, 0, rf, 0);
             }  // end ii
         } // end newton_iter
 

@@ -80,10 +80,10 @@ typedef struct
 
 typedef struct
 {
-    struct blasfeo_dvec *rf;        // residuals of f, array of (nx+nz) vectors, with ns entries
-    struct blasfeo_dvec *k;         // current values of xdot, array of (nx) vectors, with ns entries
+    struct blasfeo_dvec *rG;        // residuals of f, array of (nx+nz) vectors, with ns entries
     struct blasfeo_dvec *s;         // current values of x, array of (nx) vectors, with ns entries
-    struct blasfeo_dvec *z;         // current values of z, array of (nz) vectors, with ns entries
+    struct blasfeo_dvec *K;        // current values of xdot, array of (nx+nz) vectors, with ns entries
+    struct blasfeo_dvec *dkz;       // current step in kz 
     struct blasfeo_dvec *xn;        // x at each integration step
 
     struct blasfeo_dmat df_dx;     // temporary Jacobian of ode w.r.t x (nx+nz, nx)
