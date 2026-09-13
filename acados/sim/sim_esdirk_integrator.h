@@ -29,8 +29,8 @@
  */
 
 
-#ifndef ACADOS_SIM_SIM_SDIRK_INTEGRATOR_H_
-#define ACADOS_SIM_SIM_SDIRK_INTEGRATOR_H_
+#ifndef ACADOS_SIM_SIM_ESDIRK_INTEGRATOR_H_
+#define ACADOS_SIM_SIM_ESDIRK_INTEGRATOR_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,7 +49,7 @@ typedef struct
     int np;
     int ny;  // for NLS cost propagation
 
-} sim_sdirk_dims;
+} sim_esdirk_dims;
 
 
 
@@ -74,30 +74,28 @@ typedef struct
     external_function_generic *conl_cost_fun_jac_hess;
     external_function_generic *conl_cost_fun;
 
-} sdirk_model;
+} esdirk_model;
 
 
 
 typedef struct
 {
-    struct blasfeo_dvec *rf;        // residuals of f ((nx+nz))
-    struct blasfeo_dvec *k;
-    struct blasfeo_dvec *s;
-    struct blasfeo_dvec *z;
+    struct blasfeo_dvec *rf;        // residuals of f, array of (nx+nz) vectors, with ns entries
+    struct blasfeo_dvec *k;         // current values of xdot, array of (nx) vectors, with ns entries
+    struct blasfeo_dvec *s;         // current values of x, array of (nx) vectors, with ns entries
+    struct blasfeo_dvec *z;         // current values of z, array of (nz) vectors, with ns entries
     struct blasfeo_dvec *xn;        // x at each integration step
-
-    struct blasfeo_dvec *lambda;    // adjoint sensitivities (nx + nu)
-    struct blasfeo_dvec *lambdaK;   // auxiliary variable ((nx+nz)*ns) for adjoint propagation
 
     struct blasfeo_dmat df_dx;     // temporary Jacobian of ode w.r.t x (nx+nz, nx)
     struct blasfeo_dmat df_dxdot;  // temporary Jacobian of ode w.r.t xdot (nx+nz, nx)
     struct blasfeo_dmat df_du;     // temporary Jacobian of ode w.r.t u (nx+nz, nu)
     struct blasfeo_dmat df_dz;     // temporary Jacobian of ode w.r.t z (nx+nz, nu)
 
-    // Jacobian with respect to x and z used in stepwise computation.
-    // in case of hessian sensitivity this is ns*nstages mat of size (nx+nz.nx+nz)
-    // the first in each stage is actually df w.r.t k and z, due to explicit step
-    struct blasfeo_dmat *df_dxz;
+    // Jacobian with respect to k and z used in stepwise computation.
+    // The flat array of Jacobians with respect to k and z.
+    // it either contains ns or ns*num_steps.
+    // TODO(@anton) perhaps this is not necessary.
+    struct blasfeo_dmat *df_dkz;
 
 
     // ipiv: index of pivot vector
@@ -105,7 +103,7 @@ typedef struct
     //         if ( opts->sens_hess) - array (ns * (nx + nz)) * num_steps, to store all
     //              pivot vectors for dG_dxu
     int *ipiv;  // index of pivot vector
-} sim_sdirk_workspace;
+} sim_esdirk_workspace;
 
 
 typedef struct
@@ -129,44 +127,44 @@ typedef struct
 
     struct blasfeo_dmat *S_p;
 
-} sim_sdirk_memory;
+} sim_esdirk_memory;
 
 
 // get & set functions
-void sim_sdirk_dims_set(void *config_, void *dims_, const char *field, const int *value);
-void sim_sdirk_dims_get(void *config_, void *dims_, const char *field, int* value);
+void sim_esdirk_dims_set(void *config_, void *dims_, const char *field, const int *value);
+void sim_esdirk_dims_get(void *config_, void *dims_, const char *field, int* value);
 
 // dims
-acados_size_t sim_sdirk_dims_calculate_size();
-void *sim_sdirk_dims_assign(void *config_, void *raw_memory);
+acados_size_t sim_esdirk_dims_calculate_size();
+void *sim_esdirk_dims_assign(void *config_, void *raw_memory);
 
 // model
-acados_size_t sim_sdirk_model_calculate_size(void *config, void *dims);
-void *sim_sdirk_model_assign(void *config, void *dims, void *raw_memory);
-int sim_sdirk_model_set(void *model, const char *field, void *value);
+acados_size_t sim_esdirk_model_calculate_size(void *config, void *dims);
+void *sim_esdirk_model_assign(void *config, void *dims, void *raw_memory);
+int sim_esdirk_model_set(void *model, const char *field, void *value);
 
 // opts
-acados_size_t sim_sdirk_opts_calculate_size(void *config, void *dims);
-void *sim_sdirk_opts_assign(void *config, void *dims, void *raw_memory);
-void sim_sdirk_opts_initialize_default(void *config, void *dims, void *opts_);
-void sim_sdirk_opts_update(void *config_, void *dims, void *opts_);
-void sim_sdirk_opts_set(void *config_, void *opts_, const char *field, void *value);
+acados_size_t sim_esdirk_opts_calculate_size(void *config, void *dims);
+void *sim_esdirk_opts_assign(void *config, void *dims, void *raw_memory);
+void sim_esdirk_opts_initialize_default(void *config, void *dims, void *opts_);
+void sim_esdirk_opts_update(void *config_, void *dims, void *opts_);
+void sim_esdirk_opts_set(void *config_, void *opts_, const char *field, void *value);
 
 // memory
-acados_size_t sim_sdirk_memory_calculate_size(void *config, void *dims, void *opts_);
-void *sim_sdirk_memory_assign(void *config, void *dims, void *opts_, void *raw_memory);
-int sim_sdirk_memory_set(void *config_, void *dims_, void *mem_, const char *field, void *value);
+acados_size_t sim_esdirk_memory_calculate_size(void *config, void *dims, void *opts_);
+void *sim_esdirk_memory_assign(void *config, void *dims, void *opts_, void *raw_memory);
+int sim_esdirk_memory_set(void *config_, void *dims_, void *mem_, const char *field, void *value);
 
 // workspace
-acados_size_t sim_sdirk_workspace_calculate_size(void *config, void *dims, void *opts_);
+acados_size_t sim_esdirk_workspace_calculate_size(void *config, void *dims, void *opts_);
 
-size_t sim_sdirk_get_external_fun_workspace_requirement(void *config_, void *dims_, void *opts_, void *model_);
-void sim_sdirk_set_external_fun_workspaces(void *config_, void *dims_, void *opts_, void *model_, void *workspace_);
+size_t sim_esdirk_get_external_fun_workspace_requirement(void *config_, void *dims_, void *opts_, void *model_);
+void sim_esdirk_set_external_fun_workspaces(void *config_, void *dims_, void *opts_, void *model_, void *workspace_);
 
-void sim_sdirk_config_initialize_default(void *config);
+void sim_esdirk_config_initialize_default(void *config);
 
 // main
-int sim_sdirk(void *config, sim_in *in, sim_out *out, void *opts_, void *mem_, void *work_);
+int sim_esdirk(void *config, sim_in *in, sim_out *out, void *opts_, void *mem_, void *work_);
 
 #ifdef __cplusplus
 } /* extern "C" */
