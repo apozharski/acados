@@ -141,3 +141,7 @@ qp_out*.txt
 figures
 examples/**/*.pdf
 examples/**/*.png
+
+# gprofng #
+###########
+*.er
