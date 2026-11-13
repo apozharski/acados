@@ -17,6 +17,7 @@ classdef AcadosSimOptions < handle
         newton_iter
         newton_tol
         jac_reuse
+        exploit_singly_implicit
         sens_forw
         sens_adj
         sens_algebraic
@@ -44,6 +45,7 @@ classdef AcadosSimOptions < handle
             obj.sens_hess = false;
             obj.output_z = true;
             obj.jac_reuse = 0;
+            obj.exploit_singly_implicit = true;
             obj.compile_interface = []; % corresponds to automatic detection, possible values: true, false, []
             obj.with_batch_functionality = false;
 
@@ -69,7 +71,7 @@ classdef AcadosSimOptions < handle
             for fi = 1:numel(publicProperties)
                 property_name = publicProperties{fi};
                 if strcmp(property_name, 'num_stages') || strcmp(property_name, 'num_steps') || strcmp(property_name, 'newton_iter') || ...
-                     strcmp(property_name, 'jac_reuse') || strcmp(property_name, 'newton_tol')
+                     strcmp(property_name, 'jac_reuse') || strcmp(property_name, 'exploit_singly_implicit') || strcmp(property_name, 'newton_tol')
                     out_name = strcat('sim_method_', property_name);
                     s.(out_name) = self.(property_name);
                 else
@@ -86,7 +88,7 @@ classdef AcadosSimOptions < handle
             end
 
             obj = AcadosSimOptions();
-            sim_method_fields = {'num_stages', 'num_steps', 'newton_iter', 'jac_reuse', 'newton_tol'};
+            sim_method_fields = {'num_stages', 'num_steps', 'newton_iter', 'jac_reuse', 'exploit_singly_implicit', 'newton_tol'};
             fields = fieldnames(s);
             for i = 1:length(fields)
                 f = fields{i};
